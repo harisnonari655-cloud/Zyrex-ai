@@ -1,0 +1,18 @@
+services:
+  - type: web
+    name: zyrex-ai
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: PORT
+        value: 10000
+      - key: BOT_NAME
+        value: ZYREX
+      - key: PREFIX
+        value: "."
+      - key: PAIRING_NUMBER
+        sync: false
+      - key: OWNER_NUMBER
+        sync: false
