@@ -221,15 +221,15 @@ app.post("/api/chat", async (req, res) => {
       reply: text
     });
 
-  } catch (error) {
+} catch (error) {
 
     console.error("Gemini Error:", error);
 
     return res.status(500).json({
-      error: "Gemini API request failed."
+      error: error?.message || "Gemini API request failed."
     });
 
-  }
+      }
 
 });
 
