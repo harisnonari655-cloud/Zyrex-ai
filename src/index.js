@@ -1,126 +1,153 @@
-import "dotenv/config";
-import express from "express";
-import pino from "pino";
-import makeWASocket, {
-  DisconnectReason,
-  useMultiFileAuthState
-} from "@whiskeysockets/baileys";
+const express = require("express");
+const { GoogleGenerativeAI } = require("@google/generative-ai");
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+
+app.use(express.json());
+app.use(express.static("public"));
+
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
 app.get("/", (req, res) => {
-  res.json({
-    name: "ZYREX AI",
-    version: "V1",
-    status: "online"
-  });
+  res.send(`
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <title>ZYREX AI</title>
+      <meta name="viewport" content="width=device-width, initial-scale=1">
+      <style>
+        body {
+          margin: 0;
+          font-family: Arial, sans-serif;
+          background: #080808;
+          color: white;
+          display: flex;
+          justify-content: center;
+          align-items: center;
+          min-height: 100vh;
+        }
+        .box {
+          width: 90%;
+          max-width: 600px;
+        }
+        h1 {
+          text-align: center;
+          font-size: 40px;
+        }
+        textarea {
+          width: 100%;
+          height: 120px;
+          box-sizing: border-box;
+          padding: 15px;
+          border-radius: 12px;
+          background: #151515;
+          color: white;
+          border: 1px solid #333;
+          resize: none;
+        }
+        button {
+          width: 100%;
+          margin-top: 12px;
+          padding: 15px;
+          border: 0;
+          border-radius: 12px;
+          background: #ffffff;
+          color: #000;
+          font-weight: bold;
+          cursor: pointer;
+        }
+        #answer {
+          margin-top: 20px;
+          padding: 15px;
+          background: #151515;
+          border-radius: 12px;
+          white-space: pre-wrap;
+          min-height: 50px;
+        }
+      </style>
+    </head>
+    <body>
+      <div class="box">
+        <h1>ZYREX AI</h1>
+
+        <textarea id="message" placeholder="Ask Zyrex AI anything..."></textarea>
+
+        <button onclick="askAI()">SEND</button>
+
+        <div id="answer">Zyrex AI is ready.</div>
+      </div>
+
+      <script>
+        async function askAI() {
+          const message = document.getElementById("message").value;
+          const answer = document.getElementById("answer");
+
+          if (!message.trim()) {
+            answer.textContent = "Please enter a message.";
+            return;
+          }
+
+          answer.textContent = "Zyrex is thinking...";
+
+          try {
+            const response = await fetch("/api/chat", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json"
+              },
+              body: JSON.stringify({ message })
+            });
+
+            const data = await response.json();
+
+            if (data.error) {
+              answer.textContent = "Error: " + data.error;
+            } else {
+              answer.textContent = data.reply;
+            }
+          } catch (error) {
+            answer.textContent = "Connection error.";
+          }
+        }
+      </script>
+    </body>
+    </html>
+  `);
 });
+
+app.post("/api/chat", async (req, res) => {
+  try {
+    const message = req.body.message;
+
+    if (!message) {
+      return res.status(400).json({
+        error: "Message is required."
+      });
+    }
+
+    const model = genAI.getGenerativeModel({
+      model: "gemini-2.0-flash"
+    });
+
+    const result = await model.generateContent(message);
+    const response = await result.response;
+    const text = response.text();
+
+    res.json({
+      reply: text
+    });
+
+  } catch (error) {
+    console.error(error);
+
+    res.status(500).json({
+      error: "Gemini API request failed."
+    });
+  }
+});
+
+const PORT = process.env.PORT || 3000;
 
 app.listen(PORT, () => {
-  console.log(`🚀 ZYREX AI server running on port ${PORT}`);
-});
-
-const logger = pino({ level: "silent" });
-
-async function startZyrex() {
-  const { state, saveCreds } =
-    await useMultiFileAuthState("./auth_info");
-
-  const sock = makeWASocket({
-    auth: state,
-    logger,
-    printQRInTerminal: false
-  });
-
-  sock.ev.on("creds.update", saveCreds);
-
-  // WhatsApp Pairing Code
-  if (!state.creds.registered) {
-    const phoneNumber = process.env.PAIRING_NUMBER;
-
-    if (!phoneNumber) {
-      console.log(
-        "⚠️ PAIRING_NUMBER is not configured."
-      );
-    } else {
-      setTimeout(async () => {
-        try {
-          const code =
-            await sock.requestPairingCode(phoneNumber);
-
-          console.log("================================");
-          console.log("🔐 ZYREX AI PAIRING CODE");
-          console.log(code);
-          console.log("================================");
-        } catch (error) {
-          console.error(
-            "❌ Pairing code error:",
-            error.message
-          );
-        }
-      }, 3000);
-    }
-  }
-
-  sock.ev.on(
-    "connection.update",
-    ({ connection, lastDisconnect }) => {
-      if (connection === "connecting") {
-        console.log("🔌 Connecting ZYREX AI...");
-      }
-
-      if (connection === "open") {
-        console.log(
-          "✅ ZYREX AI connected to WhatsApp!"
-        );
-      }
-
-      if (connection === "close") {
-        const shouldReconnect =
-          lastDisconnect?.error?.output?.statusCode !==
-          DisconnectReason.loggedOut;
-
-        console.log("❌ WhatsApp connection closed.");
-
-        if (shouldReconnect) {
-          console.log("🔄 Reconnecting...");
-          startZyrex();
-        }
-      }
-    }
-  );
-
-  sock.ev.on(
-    "messages.upsert",
-    async ({ messages }) => {
-      const message = messages[0];
-
-      if (!message?.message) return;
-      if (message.key.fromMe) return;
-
-      const text =
-        message.message.conversation ||
-        message.message.extendedTextMessage?.text ||
-        "";
-
-      console.log("📩 Message:", text);
-
-      if (text.toLowerCase().trim() === "zyrex") {
-        await sock.sendMessage(
-          message.key.remoteJid,
-          {
-            text: "🤖 ZYREX AI is online!"
-          }
-        );
-      }
-    }
-  );
-}
-
-startZyrex().catch((error) => {
-  console.error(
-    "🔥 ZYREX AI Error:",
-    error
-  );
+  console.log(`ZYREX AI running on port ${PORT}`);
 });
