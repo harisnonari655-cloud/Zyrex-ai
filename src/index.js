@@ -1,127 +1,209 @@
-const express = require("express");
-const { GoogleGenerativeAI } = require("@google/generative-ai");
+import express from "express";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 
 const app = express();
 
 app.use(express.json());
-app.use(express.static("public"));
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
 app.get("/", (req, res) => {
   res.send(`
-    <!DOCTYPE html>
-    <html>
-    <head>
-      <title>ZYREX AI</title>
-      <meta name="viewport" content="width=device-width, initial-scale=1">
-      <style>
-        body {
-          margin: 0;
-          font-family: Arial, sans-serif;
-          background: #080808;
-          color: white;
-          display: flex;
-          justify-content: center;
-          align-items: center;
-          min-height: 100vh;
-        }
-        .box {
-          width: 90%;
-          max-width: 600px;
-        }
-        h1 {
-          text-align: center;
-          font-size: 40px;
-        }
-        textarea {
-          width: 100%;
-          height: 120px;
-          box-sizing: border-box;
-          padding: 15px;
-          border-radius: 12px;
-          background: #151515;
-          color: white;
-          border: 1px solid #333;
-          resize: none;
-        }
-        button {
-          width: 100%;
-          margin-top: 12px;
-          padding: 15px;
-          border: 0;
-          border-radius: 12px;
-          background: #ffffff;
-          color: #000;
-          font-weight: bold;
-          cursor: pointer;
-        }
-        #answer {
-          margin-top: 20px;
-          padding: 15px;
-          background: #151515;
-          border-radius: 12px;
-          white-space: pre-wrap;
-          min-height: 50px;
-        }
-      </style>
-    </head>
-    <body>
-      <div class="box">
-        <h1>ZYREX AI</h1>
+<!DOCTYPE html>
+<html>
+<head>
+  <title>ZYREX AI</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
 
-        <textarea id="message" placeholder="Ask Zyrex AI anything..."></textarea>
+  <style>
+    * {
+      box-sizing: border-box;
+    }
 
-        <button onclick="askAI()">SEND</button>
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: Arial, sans-serif;
+      background: #050505;
+      color: white;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 20px;
+    }
 
-        <div id="answer">Zyrex AI is ready.</div>
-      </div>
+    .box {
+      width: 100%;
+      max-width: 650px;
+      background: #101010;
+      padding: 25px;
+      border-radius: 20px;
+      border: 1px solid #292929;
+      box-shadow: 0 0 40px rgba(255,255,255,0.05);
+    }
 
-      <script>
-        async function askAI() {
-          const message = document.getElementById("message").value;
-          const answer = document.getElementById("answer");
+    h1 {
+      text-align: center;
+      font-size: 42px;
+      margin: 0 0 8px;
+    }
 
-          if (!message.trim()) {
-            answer.textContent = "Please enter a message.";
-            return;
-          }
+    .status {
+      text-align: center;
+      color: #777;
+      margin-bottom: 25px;
+    }
 
-          answer.textContent = "Zyrex is thinking...";
+    textarea {
+      width: 100%;
+      height: 130px;
+      padding: 15px;
+      border-radius: 14px;
+      background: #181818;
+      color: white;
+      border: 1px solid #333;
+      outline: none;
+      resize: none;
+      font-size: 16px;
+    }
 
-          try {
-            const response = await fetch("/api/chat", {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json"
-              },
-              body: JSON.stringify({ message })
-            });
+    textarea:focus {
+      border-color: #666;
+    }
 
-            const data = await response.json();
+    button {
+      width: 100%;
+      margin-top: 12px;
+      padding: 15px;
+      border: none;
+      border-radius: 14px;
+      background: white;
+      color: black;
+      font-size: 16px;
+      font-weight: bold;
+      cursor: pointer;
+    }
 
-            if (data.error) {
-              answer.textContent = "Error: " + data.error;
-            } else {
-              answer.textContent = data.reply;
-            }
-          } catch (error) {
-            answer.textContent = "Connection error.";
-          }
-        }
-      </script>
-    </body>
-    </html>
+    button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    #answer {
+      margin-top: 20px;
+      padding: 18px;
+      background: #181818;
+      border: 1px solid #292929;
+      border-radius: 14px;
+      white-space: pre-wrap;
+      line-height: 1.5;
+      min-height: 60px;
+    }
+  </style>
+</head>
+
+<body>
+
+  <div class="box">
+
+    <h1>ZYREX AI</h1>
+
+    <div class="status">
+      AI Assistant • Online
+    </div>
+
+    <textarea
+      id="message"
+      placeholder="Ask Zyrex AI anything..."
+    ></textarea>
+
+    <button id="sendBtn" onclick="askAI()">
+      SEND
+    </button>
+
+    <div id="answer">
+      Zyrex AI is ready.
+    </div>
+
+  </div>
+
+<script>
+
+async function askAI() {
+
+  const message =
+    document.getElementById("message").value.trim();
+
+  const answer =
+    document.getElementById("answer");
+
+  const button =
+    document.getElementById("sendBtn");
+
+  if (!message) {
+    answer.textContent = "Please enter a message.";
+    return;
+  }
+
+  button.disabled = true;
+  answer.textContent = "Zyrex is thinking...";
+
+  try {
+
+    const response = await fetch("/api/chat", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        message: message
+      })
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      answer.textContent =
+        "Error: " + (data.error || "Something went wrong.");
+    } else {
+      answer.textContent =
+        data.reply || "No response received.";
+    }
+
+  } catch (error) {
+
+    answer.textContent =
+      "Connection error. Please try again.";
+
+  } finally {
+
+    button.disabled = false;
+
+  }
+}
+
+</script>
+
+</body>
+</html>
   `);
 });
 
 app.post("/api/chat", async (req, res) => {
+
   try {
-    const message = req.body.message;
+
+    const message = req.body?.message;
 
     if (!message) {
       return res.status(400).json({
         error: "Message is required."
+      });
+    }
+
+    if (!process.env.GEMINI_API_KEY) {
+      return res.status(500).json({
+        error: "GEMINI_API_KEY is not configured."
       });
     }
 
@@ -130,20 +212,25 @@ app.post("/api/chat", async (req, res) => {
     });
 
     const result = await model.generateContent(message);
+
     const response = await result.response;
+
     const text = response.text();
 
-    res.json({
+    return res.json({
       reply: text
     });
 
   } catch (error) {
-    console.error(error);
 
-    res.status(500).json({
+    console.error("Gemini Error:", error);
+
+    return res.status(500).json({
       error: "Gemini API request failed."
     });
+
   }
+
 });
 
 const PORT = process.env.PORT || 3000;
