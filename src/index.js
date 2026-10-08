@@ -190,15 +190,80 @@ async function askAI() {
 });
 
 app.post("/api/chat", async (req, res) => {
-
   try {
-
     const message = req.body?.message;
 
     if (!message) {
       return res.status(400).json({
         error: "Message is required."
       });
+    }
+
+    if (!process.env.GEMINI_API_KEY) {
+      return res.status(500).json({
+        error: "GEMINI_API_KEY is not configured."
+      });
+    }
+
+    const models = [
+      "gemini-3.8-flash",
+      "gemini-2.5-flash"
+    ];
+
+    let lastError = null;
+
+    for (const modelName of models) {
+      const model = genAI.getGenerativeModel({
+        model: modelName
+      });
+
+      for (let attempt = 1; attempt <= 2; attempt++) {
+        try {
+          const result = await model.generateContent(message);
+          const response = await result.response;
+          const text = response.text();
+
+          return res.json({
+            reply: text,
+            model: modelName
+          });
+
+        } catch (error) {
+          lastError = error;
+
+          const errorText = error?.message || "";
+
+          const temporaryError =
+            errorText.includes("503") ||
+            errorText.includes("429") ||
+            errorText.includes("Service Unavailable") ||
+            errorText.includes("high demand");
+
+          if (!temporaryError) {
+            break;
+          }
+
+          await new Promise(resolve =>
+            setTimeout(resolve, 1500 * attempt)
+          );
+        }
+      }
+    }
+
+    console.error("All Gemini models failed:", lastError);
+
+    return res.status(503).json({
+      error: "Zyrex AI is temporarily busy. Please try again in a moment."
+    });
+
+  } catch (error) {
+    console.error("Gemini Error:", error);
+
+    return res.status(500).json({
+      error: error?.message || "Gemini API request failed."
+    });
+  }
+});
     }
 
     if (!process.env.GEMINI_API_KEY) {
